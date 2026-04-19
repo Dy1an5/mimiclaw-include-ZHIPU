@@ -187,18 +187,32 @@ static bool provider_is_openai(void)
     return strcmp(s_provider, "openai") == 0;
 }
 
+static bool provider_is_zhipu(void)
+{
+    return strcmp(s_provider, "zhipu") == 0;
+}
+
 static const char *llm_api_url(void)
 {
+    if (provider_is_zhipu()) {
+        return MIMI_ZHIPU_API_URL;
+    }
     return provider_is_openai() ? MIMI_OPENAI_API_URL : MIMI_LLM_API_URL;
 }
 
 static const char *llm_api_host(void)
 {
+    if (provider_is_zhipu()) {
+        return "open.bigmodel.cn";
+    }
     return provider_is_openai() ? "api.openai.com" : "api.anthropic.com";
 }
 
 static const char *llm_api_path(void)
 {
+    if (provider_is_zhipu()) {
+        return "/api/paas/v4/chat/completions";
+    }
     return provider_is_openai() ? "/v1/chat/completions" : "/v1/messages";
 }
 
@@ -265,7 +279,7 @@ static esp_err_t llm_http_direct(const char *post_data, resp_buf_t *rb, int *out
 
     esp_http_client_set_method(client, HTTP_METHOD_POST);
     esp_http_client_set_header(client, "Content-Type", "application/json");
-    if (provider_is_openai()) {
+    if (provider_is_openai() || provider_is_zhipu()) {
         if (s_api_key[0]) {
             char auth[LLM_API_KEY_MAX_LEN + 16];
             snprintf(auth, sizeof(auth), "Bearer %s", s_api_key);
@@ -293,7 +307,7 @@ static esp_err_t llm_http_via_proxy(const char *post_data, resp_buf_t *rb, int *
     int body_len = strlen(post_data);
     char header[1024];
     int hlen = 0;
-    if (provider_is_openai()) {
+    if (provider_is_openai() || provider_is_zhipu()) {
         hlen = snprintf(header, sizeof(header),
             "POST %s HTTP/1.1\r\n"
             "Host: %s\r\n"
@@ -565,7 +579,7 @@ esp_err_t llm_chat_tools(const char *system_prompt,
         cJSON_AddNumberToObject(body, "max_tokens", MIMI_LLM_MAX_TOKENS);
     }
 
-    if (provider_is_openai()) {
+    if (provider_is_openai() || provider_is_zhipu()) {
         cJSON *openai_msgs = convert_messages_openai(system_prompt, messages);
         cJSON_AddItemToObject(body, "messages", openai_msgs);
 
@@ -635,7 +649,7 @@ esp_err_t llm_chat_tools(const char *system_prompt,
         return ESP_FAIL;
     }
 
-    if (provider_is_openai()) {
+    if (provider_is_openai() || provider_is_zhipu()) {
         cJSON *choices = cJSON_GetObjectItem(root, "choices");
         cJSON *choice0 = choices && cJSON_IsArray(choices) ? cJSON_GetArrayItem(choices, 0) : NULL;
         if (choice0) {
